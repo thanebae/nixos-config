@@ -77,13 +77,30 @@
   users.users."thane" = {
     isNormalUser = true;
     description = "THANE";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [ "networkmanager" "wheel" "video" "camera" ];
     packages = with pkgs; [
     #  thunderbird
     ];
   };
+# =========================================================================
+  # 1. TỰ ĐỘNG TẠO KEYRING RỖNG (Cho các ứng dụng hệ thống khác không bị hỏi pass)
+  # =========================================================================
+  systemd.tmpfiles.rules = [
+    "d /home/thane/.local/share/keyrings 0700 thane users -"
+    "f /home/thane/.local/share/keyrings/default 0600 thane users - login"
+    "f /home/thane/.local/share/keyrings/login.keyring 0600 thane users - [keyring]\ndisplay-name=login\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n"
+  ];
 
-  # Install firefox.
+  # =========================================================================
+  # 2. XDG DESKTOP PORTAL (Chuẩn Wayland cho GNOME)
+  # =========================================================================
+  xdg.portal = {
+    enable = true;
+    extraPortals = [ pkgs.xdg-desktop-portal-gnome ];
+    config.common.default = [ "gnome" "*" ];
+  };
+  
+# Install firefox.
   programs.firefox.enable = false;
 
   # Allow unfree packages
@@ -92,9 +109,29 @@
   # List packages installed in system profile.
   # You can use https://search.nixos.org/ to find more packages (and options).
   environment.systemPackages = with pkgs; [
-      google-chrome
+      (google-chrome.override {
+       commandLineArgs = [
+        "--password-store=basic"
+        "--ozone-platform-hint=auto"
+        "--enable-features=WaylandWindowDecorations"
+      ];
+      })
       git
+      pciutils
       fastfetch
+      vlc
+      htop
+      btop
+      mkvtoolnix
+      remmina
+      localsend
+      telegram-desktop
+      qbittorrent
+      zip
+      unzip
+      p7zip
+      unrar
+      plex-desktop
   ];
 # 1. Bật uinput module cho kernel
   boot.kernelModules = [ "uinput" ];
@@ -114,6 +151,9 @@
   systemd.services."fcitx5-lotus-server@thane" = {
     wantedBy = [ "multi-user.target" ];
     overrideStrategy = "asDropin";
+    serviceConfig = {
+      TimeoutStopSec = "3s";
+    };
   };
 
   # 4. Biến môi trường bộ gõ
@@ -126,34 +166,6 @@
     # Bật bộ gõ Wayland cho Chrome/Electron
     NIXOS_OZONE_WL = "1";
   };
-system.activationScripts.fcitx5Profile = ''
-    USER_DIR="/home/thane/.config/fcitx5"
-    mkdir -p "$USER_DIR"
-    cat << 'EOF' > "$USER_DIR/profile"
-[Groups/0]
-# Group Name
-Name=Default
-# Layout
-Default Layout=us
-# Default Input Method
-DefaultIM=lotus
-
-[Groups/0/Items/0]
-# Name
-Name=keyboard-us
-# Layout
-# Layout=
-
-[Groups/0/Items/1]
-# Name
-Name=lotus
-# Layout
-# Layout=
-
-[GroupOrder]
-0=Default
-    chown -R thane:users "$USER_DIR"
-  '';
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;
@@ -197,4 +209,132 @@ Name=lotus
   # For more information, see `man configuration.nix` or https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion .
   system.stateVersion = "26.05"; # Did you read the comment?
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  systemd.settings.Manager = {
+    DefaultTimeoutStopSec = "5s";
+  };
+services.gnome.gnome-keyring.enable = true; 
+ # 1. Kích hoạt OpenGL / Graphics
+  hardware.graphics.enable = true;
+
+  # 2. Khai báo driver nvidia cho hệ thống đồ họa
+  services.xserver.videoDrivers = [ "nvidia" ];
+
+  # 3. Thiết lập chi tiết driver NVIDIA
+  hardware.nvidia = {
+    # Bắt buộc bật cho Wayland / GNOME để tránh xé hình
+    modesetting.enable = true;
+
+    # Tắt open driver vì Quadro T2000 (Turing) dùng driver đóng ổn định hơn
+    open = false;
+
+    # Bật bảng điều khiển đồ họa nvidia-settings
+    nvidiaSettings = true;
+
+    # Sử dụng bản driver ổn định (Production/Stable)
+    package = config.boot.kernelPackages.nvidiaPackages.stable;
+
+    # Cấu hình PRIME Offload (tiết kiệm pin, chỉ bật card rời khi cần)
+    prime = {
+      offload = {
+        enable = true;
+        enableOffloadCmd = true;
+      };
+      intelBusId = "PCI:0:2:0";
+      nvidiaBusId = "PCI:1:0:0";
+    };
+  };
+
+# ==========================================
+  # 1. PHÂN QUYỀN TRUY CẬP PHẦN CỨNG CAMERA (UDEV)
+  # Gán quyền đọc/ghi camera cho mọi tiến trình đăng nhập (kể cả user gdm)
+  # ==========================================
+  services.udev.extraRules = ''
+    KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", MODE="0666"
+  '';
+
+  # Gán thêm nhóm video và camera cho user gdm
+  users.users.gdm = {
+    extraGroups = [ "video" "camera" ];
+  };
+
+  # ==========================================
+  # 2. CẤU HÌNH NHẬN DIỆN KHUÔN MẶT (HOWDY)
+  # ==========================================
+  services.howdy = {
+    enable = true;
+    package = pkgs.howdy;
+    settings = {
+      core = {
+        no_confirmation = true;
+        abort_if_ssh = true;
+        detection_notice = false;
+      };
+      video = {
+        device_path = "/dev/video2";
+        dark_threshold = 50;
+        certainty = 4.5;
+        timeout = 4;
+      };
+    };
+  };
+
+  # ==========================================
+  # 3. CẤU HÌNH CẢM BIẾN VÂN TAY (FPRINTD TOD)
+  # ==========================================
+  services.fprintd = {
+    enable = true;
+    package = pkgs.fprintd-tod;
+    tod = {
+      enable = true;
+      driver = pkgs.libfprint-2-tod1-goodix;
+    };
+  };
+
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id.indexOf("net.reactivated.fprint.") === 0 && subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
+  # ==========================================
+  # 4. CHUỖI PAM TÍCH HỢP SONG SONG
+  # ==========================================
+
+  # Chuỗi xác thực cho SUDO
+  security.pam.services.sudo.text = pkgs.lib.mkForce ''
+    account required pam_unix.so
+    auth sufficient ${pkgs.howdy}/lib/security/pam_howdy.so
+    auth [success=done default=ignore] ${pkgs.fprintd}/lib/security/pam_fprintd.so
+    auth sufficient pam_unix.so try_first_pass likeauth nullok
+    auth required pam_deny.so
+    password sufficient pam_unix.so nullok yescrypt
+    session required pam_env.so conffile=/etc/pam/environment readenv=0
+    session required pam_unix.so
+  '';
+
+  # Chuỗi xác thực cho LOGIN (Console TTY)
+  security.pam.services.login.text = pkgs.lib.mkForce ''
+    account required pam_unix.so
+    account required pam_nologin.so
+    auth sufficient ${pkgs.howdy}/lib/security/pam_howdy.so
+    auth [success=done default=ignore] ${pkgs.fprintd}/lib/security/pam_fprintd.so
+    auth sufficient pam_unix.so nullok
+    auth required pam_deny.so
+    password sufficient pam_unix.so nullok yescrypt
+    session required pam_env.so conffile=/etc/pam/environment readenv=0
+    session required pam_unix.so
+    session optional ${pkgs.systemd}/lib/security/pam_systemd.so
+    auth optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so
+   session optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so auto_start
+  '';
+
+  # Chuỗi xác thực cho GDM (Kế thừa login + nạp đầy đủ systemd session)
+  security.pam.services.gdm-password.text = pkgs.lib.mkForce ''
+    account include login
+    auth substack login
+    password substack login
+    session include login
+  '';
 }
