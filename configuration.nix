@@ -1,14 +1,15 @@
 # Edit this configuration file to define what should be installed on
 # your system. Help is available in the configuration.nix(5) man page, on
 # https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
-
-{ config, pkgs, ... }:
-
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-    ];
+  config,
+  pkgs,
+  ...
+}: {
+  imports = [
+    # Include the results of the hardware scan.
+    ./hardware-configuration.nix
+  ];
 
   # Use the systemd-boot EFI boot loader.
   boot.loader.systemd-boot.enable = true;
@@ -77,12 +78,12 @@
   users.users."thane" = {
     isNormalUser = true;
     description = "THANE";
-    extraGroups = [ "networkmanager" "wheel" "video" "camera" ];
+    extraGroups = ["networkmanager" "wheel" "video" "camera"];
     packages = with pkgs; [
-    #  thunderbird
+      #  thunderbird
     ];
   };
-# =========================================================================
+  # =========================================================================
   # 1. TỰ ĐỘNG TẠO KEYRING RỖNG (Cho các ứng dụng hệ thống khác không bị hỏi pass)
   # =========================================================================
   systemd.tmpfiles.rules = [
@@ -96,11 +97,11 @@
   # =========================================================================
   xdg.portal = {
     enable = true;
-    extraPortals = [ pkgs.xdg-desktop-portal-gnome ];
-    config.common.default = [ "gnome" "*" ];
+    extraPortals = [pkgs.xdg-desktop-portal-gnome];
+    config.common.default = ["gnome" "*"];
   };
-  
-# Install firefox.
+
+  # Install firefox.
   programs.firefox.enable = false;
 
   # Allow unfree packages
@@ -109,32 +110,32 @@
   # List packages installed in system profile.
   # You can use https://search.nixos.org/ to find more packages (and options).
   environment.systemPackages = with pkgs; [
-      (google-chrome.override {
-       commandLineArgs = [
+    (google-chrome.override {
+      commandLineArgs = [
         "--password-store=basic"
         "--ozone-platform-hint=auto"
         "--enable-features=WaylandWindowDecorations"
       ];
-      })
-      git
-      pciutils
-      fastfetch
-      vlc
-      htop
-      btop
-      mkvtoolnix
-      remmina
-      localsend
-      telegram-desktop
-      qbittorrent
-      zip
-      unzip
-      p7zip
-      unrar
-      plex-desktop
+    })
+    git
+    pciutils
+    fastfetch
+    vlc
+    htop
+    btop
+    mkvtoolnix
+    remmina
+    localsend
+    telegram-desktop
+    qbittorrent
+    zip
+    unzip
+    p7zip
+    unrar
+    plex-desktop
   ];
-# 1. Bật uinput module cho kernel
-  boot.kernelModules = [ "uinput" ];
+  # 1. Bật uinput module cho kernel
+  boot.kernelModules = ["uinput"];
 
   # 2. Cấu hình Fcitx5 với engine Lotus
   i18n.inputMethod = {
@@ -147,9 +148,9 @@
   };
 
   # 3. Kích hoạt fcitx5-lotus-server systemd daemon cho user thane
-  systemd.packages = [ pkgs.fcitx5-lotus ];
+  systemd.packages = [pkgs.fcitx5-lotus];
   systemd.services."fcitx5-lotus-server@thane" = {
-    wantedBy = [ "multi-user.target" ];
+    wantedBy = ["multi-user.target"];
     overrideStrategy = "asDropin";
     serviceConfig = {
       TimeoutStopSec = "3s";
@@ -208,16 +209,16 @@
   #
   # For more information, see `man configuration.nix` or https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion .
   system.stateVersion = "26.05"; # Did you read the comment?
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = ["nix-command" "flakes"];
   systemd.settings.Manager = {
     DefaultTimeoutStopSec = "5s";
   };
-services.gnome.gnome-keyring.enable = true; 
- # 1. Kích hoạt OpenGL / Graphics
+  services.gnome.gnome-keyring.enable = true;
+  # 1. Kích hoạt OpenGL / Graphics
   hardware.graphics.enable = true;
 
   # 2. Khai báo driver nvidia cho hệ thống đồ họa
-  services.xserver.videoDrivers = [ "nvidia" ];
+  services.xserver.videoDrivers = ["nvidia"];
 
   # 3. Thiết lập chi tiết driver NVIDIA
   hardware.nvidia = {
@@ -244,7 +245,7 @@ services.gnome.gnome-keyring.enable = true;
     };
   };
 
-# ==========================================
+  # ==========================================
   # 1. PHÂN QUYỀN TRUY CẬP PHẦN CỨNG CAMERA (UDEV)
   # Gán quyền đọc/ghi camera cho mọi tiến trình đăng nhập (kể cả user gdm)
   # ==========================================
@@ -254,7 +255,7 @@ services.gnome.gnome-keyring.enable = true;
 
   # Gán thêm nhóm video và camera cho user gdm
   users.users.gdm = {
-    extraGroups = [ "video" "camera" ];
+    extraGroups = ["video" "camera"];
   };
 
   # ==========================================
@@ -316,18 +317,18 @@ services.gnome.gnome-keyring.enable = true;
 
   # Chuỗi xác thực cho LOGIN (Console TTY)
   security.pam.services.login.text = pkgs.lib.mkForce ''
-    account required pam_unix.so
-    account required pam_nologin.so
-    auth sufficient ${pkgs.howdy}/lib/security/pam_howdy.so
-    auth [success=done default=ignore] ${pkgs.fprintd}/lib/security/pam_fprintd.so
-    auth sufficient pam_unix.so nullok
-    auth required pam_deny.so
-    password sufficient pam_unix.so nullok yescrypt
-    session required pam_env.so conffile=/etc/pam/environment readenv=0
-    session required pam_unix.so
-    session optional ${pkgs.systemd}/lib/security/pam_systemd.so
-    auth optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so
-   session optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so auto_start
+     account required pam_unix.so
+     account required pam_nologin.so
+     auth sufficient ${pkgs.howdy}/lib/security/pam_howdy.so
+     auth [success=done default=ignore] ${pkgs.fprintd}/lib/security/pam_fprintd.so
+     auth sufficient pam_unix.so nullok
+     auth required pam_deny.so
+     password sufficient pam_unix.so nullok yescrypt
+     session required pam_env.so conffile=/etc/pam/environment readenv=0
+     session required pam_unix.so
+     session optional ${pkgs.systemd}/lib/security/pam_systemd.so
+     auth optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so
+    session optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so auto_start
   '';
 
   # Chuỗi xác thực cho GDM (Kế thừa login + nạp đầy đủ systemd session)
