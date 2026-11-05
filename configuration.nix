@@ -117,6 +117,7 @@
         "--enable-features=WaylandWindowDecorations"
       ];
     })
+    (pkgs.callPackage ./subtitleedit.nix {})
     git
     pciutils
     fastfetch
@@ -134,6 +135,57 @@
     unrar
     plex-desktop
   ];
+
+# =========================================================================
+  # TỰ ĐỘNG TẢI SUBTITLE EDIT BẢN MỚI NHẤT KHI CÀI MỚI HOẶC KHỞI ĐỘNG CÓ MẠNG
+  # =========================================================================
+  systemd.services.update-subtitleedit = {
+    description = "Tu dong tai Subtitle Edit moi nhat tu GitHub";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = with pkgs; [ curl jq gnutar gzip coreutils ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+
+    script = ''
+      INSTALL_DIR="/opt/subtitleedit/latest"
+      mkdir -p "$INSTALL_DIR"
+
+      # Truy vấn GitHub Releases API lấy link tải file tar.gz mới nhất
+      API_RESP=$(curl -sL https://api.github.com/repos/SubtitleEdit/subtitleedit/releases/latest)
+      DOWNLOAD_URL=$(echo "$API_RESP" | jq -r '.assets[] | select(.name == "SubtitleEdit-Linux-x64.tar.gz") | .browser_download_url' | head -n 1)
+      LATEST_TAG=$(echo "$API_RESP" | jq -r .tag_name)
+
+      if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
+        CURRENT_VER=""
+        [ -f "$INSTALL_DIR/version.txt" ] && CURRENT_VER=$(cat "$INSTALL_DIR/version.txt")
+
+        # Nếu chưa có file hoặc GitHub có bản tag mới hơn -> Tự tải và giải nén
+        if [ "$CURRENT_VER" != "$LATEST_TAG" ] || [ ! -f "$INSTALL_DIR/SubtitleEdit" ]; then
+          echo "Phat hien ban moi $LATEST_TAG, dang tien hanh tai ve..."
+          TMP_DIR=$(mktemp -d)
+          curl -L "$DOWNLOAD_URL" -o "$TMP_DIR/se.tar.gz"
+          tar -xzf "$TMP_DIR/se.tar.gz" -C "$INSTALL_DIR"
+          chmod +x "$INSTALL_DIR/SubtitleEdit"
+          echo "$LATEST_TAG" > "$INSTALL_DIR/version.txt"
+
+          # Tự động trích xuất icon đặt vào thư mục biểu tượng hệ thống
+          if [ -f "$INSTALL_DIR/SubtitleEdit.png" ]; then
+            mkdir -p /run/current-system/sw/share/icons/hicolor/256x256/apps
+            cp "$INSTALL_DIR/SubtitleEdit.png" /run/current-system/sw/share/icons/hicolor/256x256/apps/subtitleedit.png 2>/dev/null || true
+          fi
+
+          rm -rf "$TMP_DIR"
+          echo "Cai dat Subtitle Edit $LATEST_TAG hoan tat!"
+        fi
+      fi
+    '';
+  };
+
   # 1. Bật uinput module cho kernel
   boot.kernelModules = ["uinput"];
 
